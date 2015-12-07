@@ -153,8 +153,8 @@ if __name__ == '__main__':
         return parser2(pfile), parser2(nfile)
 
 #    positive_x, negative_x = lab('./data/blocks-lib', './data/blocks-negative', p=0.20)
-#    positive_x, negative_x = lab('../depots-plans/depots-lib', '../depots-plans/depots-negative', p=0.20)
-    positive_x, negative_x = lab('../driverlog-plans/driverlog-lib', '../driverlog-plans/driverlog-negative', p=0.20)
+#    positive_x, negative_x = lab('./data/depots-lib', './data/depots-negative', p=0.20)
+    positive_x, negative_x = lab('./data/driverlog-lib', './data/driverlog-negative', p=0.20)
 
     # features
     L1_x, dictionary = NLP_Code(positive_x+negative_x, K=1)
@@ -167,6 +167,7 @@ if __name__ == '__main__':
     # training
     svm = NuSVC(kernel='poly') # linear, poly, rbf, NuSVC
     lmnn = LMNN(k=5, learn_rate=1e-5, max_iter=200) 
+    
 
     svmavr = []
     lmnnavr = []
@@ -182,7 +183,7 @@ if __name__ == '__main__':
             svm.fit(train_x, train_y)
             svmrec.append( float((svm.predict(test_x) == test_y).sum())/ len(test_y) )
 
-            L = lmnn.fit(pca(train_x, 0.99), train_y, verbose=True).L
+            L = lmnn.fit(train_x, train_y, verbose=True).L
             lmnnrec.append( knn(np.dot(train_x, L), train_y, np.dot(test_x, L), test_y) )
 
         print '\tSVM accuracy: {} = {}'.format(svmrec, np.mean(svmrec))
