@@ -1,0 +1,12 @@
+cannot find max argument
+set MAX as 400
+changed
+Adding level-2 data
+Adding level-3 data
+x.shape=(400, 627) y.shape=(400,)
+MAX=400
+	SVM accuracy: [0.9, 0.825, 0.825, 0.7, 0.8, 0.9, 0.8, 0.85, 0.85, 0.7] = 0.815
+	LMNN accuracy: [0.725, 0.65, 0.4, 0.5, 0.675, 0.5, 0.5, 0.55, 0.675, 0.6] = 0.5775
+	GaussianNB accuracy: [0.425, 0.575, 0.475, 0.5, 0.325, 0.6, 0.4, 0.4, 0.5, 0.55] = 0.475
+	MultinomiaNB accuracy: [0.775, 0.6, 0.55, 0.45, 0.525, 0.65, 0.55, 0.6, 0.625, 0.65] = 0.5975
+	BernoulliNB accuracy: [0.6, 0.725, 0.8, 0.725, 0.65, 0.8, 0.75, 0.675, 0.625, 0.8] = 0.715

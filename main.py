@@ -3,9 +3,14 @@ import random
 import cPickle
 import numpy as np
 
+import sys
+
 from sklearn.decomposition import PCA
 from sklearn.svm import SVC, NuSVC
 from sklearn.cross_validation import train_test_split, KFold
+
+from sklearn.naive_bayes import GaussianNB, MultinomialNB, BernoulliNB
+
 
 from metric_learn import LMNN
 from sklearn.neighbors import KNeighborsClassifier, DistanceMetric  
@@ -76,6 +81,17 @@ def change(filename, output, p):
             ofile.write(line)
         elif random.random() >= p:
             ofile.write(line)
+        else:
+            continue
+            # delete pass to change "deletion" to "shuffling" 
+            components = line.replace('(', '').replace(')', '').strip().split(' ')
+#           print components
+            action = components.pop(0)
+            np.random.shuffle(components)
+            components = [action] + components 
+#           print components
+            ofile.write(' '.join(components))
+
     ifile.close()
     ofile.close()
     print 'changed'
@@ -143,57 +159,123 @@ def pca(x, variance_ratio=0.90):
     ind += 1
     pca.set_params(n_components=ind)
     x = pca.fit_transform(x)
-    print 'final shape: {}'.format(x.shape)
-    return x
+    return x, pca
+
+def knn(train_x, train_y, test_x, test_y, K=5):
+    neigh = KNeighborsClassifier(n_neighbors=K)
+    neigh.fit(train_x, train_y)
+    acc = (neigh.predict(test_x) == test_y).sum()
+    return float(acc)/test_y.shape[0]
 
 
 if __name__ == '__main__':   
+    try:
+        ind = sys.argv.index('-max')    
+        MAX = int(sys.argv[ind+1])
+    except:
+        print 'cannot find max argument'
+        print 'set MAX as 400'
+        MAX = 400
+
+
     def lab(pfile, nfile, p):
         change(pfile, nfile, p)
         return parser2(pfile), parser2(nfile)
 
-#    positive_x, negative_x = lab('./data/blocks-lib', './data/blocks-negative', p=0.20)
+    positive_x, negative_x = lab('./data/blocks-lib', './data/blocks-negative', p=0.40)
 #    positive_x, negative_x = lab('./data/depots-lib', './data/depots-negative', p=0.20)
-    positive_x, negative_x = lab('./data/driverlog-lib', './data/driverlog-negative', p=0.20)
+#    positive_x, negative_x = lab('./data/driverlog-lib', './data/driverlog-negative', p=0.20)
 
     # features
-    L1_x, dictionary = NLP_Code(positive_x+negative_x, K=1)
-#   L2_x, dictionary = NLP_Code(positive_x+negative_x, K=2)
-#   L2_x = pca(L2_x, 0.90) 
-    x = np.concatenate([L1_x], 1)
+#    L1_x, dictionary = NLP_Code(positive_x+negative_x, K=1)
+#    L2_x, dictionary = NLP_Code(positive_x+negative_x, K=2)
+#    L4_x, dictionary = NLP_Code(positive_x+negative_x, K=4)
+
+#    L2_x, _ = pca(L2_x, 0.99) 
+#    L4_x, _ = pca(L4_x, 0.99) 
+
+    xs = []
+    for l in ['-1', '-2','-3','-4']:
+        if l in sys.argv:
+            l = int(l[1])
+
+            _x, dictionary = NLP_Code(positive_x+negative_x, K=l)
+            _x, _ = pca(_x, 0.99) 
+            xs.append(_x)
+            print 'Adding level-{} data'.format(l)
+
+    x = np.concatenate(xs, 1)
     y = np.array(len(positive_x)*[1] + len(negative_x)*[0] )
     print 'x.shape={} y.shape={}'.format(x.shape, y.shape)
 
+    index = np.random.permutation(len(x))
+    x = x[index]
+    y = y[index]
+#   x -= x.min(1).reshape(-1, 1)
+#   x /= x.max(1).reshape(-1, 1)
+
+    # truncate
+    x = x[:MAX, :]
+    y = y[:MAX]
+    print 'MAX={}'.format(MAX)
+    sys.stdout.flush()
+
+
     # training
-    svm = NuSVC(kernel='poly') # linear, poly, rbf, NuSVC
-    lmnn = LMNN(k=5, learn_rate=1e-5, max_iter=200) 
-    
+    svm = NuSVC(kernel='linear') # linear, poly, rbf, NuSVC
+    lmnn = LMNN(k=5, learn_rate=1e-7, max_iter=400) 
+    gnb = GaussianNB()
+    mnb = MultinomialNB(alpha=0.0)
+    bnb = BernoulliNB(alpha=0.0)
 
-    svmavr = []
-    lmnnavr = []
-    for _ in xrange(10):
-        print 'Iteration {}'.format(_)
+    svmrec = []
+    lmnnrec  = []
+    gnbrec = []
+    mnbrec = []
+    bnbrec = []
 
-        svmrec = []
-        lmnnrec  = []
-        for train_index, test_index in KFold(len(x), n_folds=10, shuffle=True):
-            train_x, test_x = x[train_index], x[test_index]
-            train_y, test_y = y[train_index], y[test_index]
+    for train_index, test_index in KFold(len(x), n_folds=10, shuffle=True):
+        train_x, test_x = x[train_index], x[test_index]
+        train_y, test_y = y[train_index], y[test_index]
 
-            svm.fit(train_x, train_y)
-            svmrec.append( float((svm.predict(test_x) == test_y).sum())/ len(test_y) )
+        gnb.fit(train_x, train_y)
+        gnbrec.append( float((gnb.predict(test_x) == test_y).sum())/ len(test_y) )
 
-            L = lmnn.fit(train_x, train_y, verbose=True).L
-            lmnnrec.append( knn(np.dot(train_x, L), train_y, np.dot(test_x, L), test_y) )
+        nonneg_train_x = train_x - train_x.min()
+        nonneg_test_x = test_x - test_x.min()
+        mnb.fit(nonneg_train_x, train_y)
+        mnbrec.append( float((mnb.predict(nonneg_test_x) == test_y).sum())/ len(test_y) )
 
-        print '\tSVM accuracy: {} = {}'.format(svmrec, np.mean(svmrec))
-        svmavr.append(np.mean(svmrec))
+        bnb.fit(train_x, train_y)
+        bnbrec.append( float((bnb.predict(test_x) == test_y).sum())/ len(test_y) )
 
-        print '\tLMNN accuracy: {} = {}'.format(lmnnrec, np.mean(lmnnrec))
-        lmnnavr.append(np.mean(lmnnrec))
+        svm.fit(train_x, train_y)
+        svmrec.append( float((svm.predict(test_x) == test_y).sum())/ len(test_y) )
 
-    print 'SVM final accuracy: {}'.format(np.mean(svmavr))
-    print 'LMNN final accuracy: {}'.format(np.mean(lmnnavr))
+        _ = PCA(n_components=20).fit(train_x)
+        train_x = _.transform(train_x)
+        test_x = _.transform(test_x)
+        print train_x.shape
+        L = lmnn.fit(train_x, train_y, verbose=True).L
+        lmnnrec.append( knn(np.dot(train_x, L), train_y, np.dot(test_x, L), test_y, K=5) )
+
+    print '\tSVM accuracy: {} = {}'.format(svmrec, np.mean(svmrec))
+    print '\tLMNN accuracy: {} = {}'.format(lmnnrec, np.mean(lmnnrec))
+    print '\tGaussianNB accuracy: {} = {}'.format(gnbrec, np.mean(gnbrec))
+    print '\tMultinomiaNB accuracy: {} = {}'.format(mnbrec, np.mean(mnbrec))
+    print '\tBernoulliNB accuracy: {} = {}'.format(bnbrec, np.mean(bnbrec))
 
 
-#    store2arff(x, y, 'parsed.arff', range(x.shape[1]))
+
+#   lmnnavr.append(np.mean(lmnnrec))
+#   gnbavr.append(np.mean(gnbrec))
+#   svmavr.append(np.mean(svmrec))
+#   svmavr = []
+#   lmnnavr = []
+#   gnbavr = []
+#   print 'GuassianNB final accuracy: {}'.format(np.mean(gnbavr))
+#   print 'SVM final accuracy: {}'.format(np.mean(svmavr))
+#   print 'LMNN final accuracy: {}'.format(np.mean(lmnnavr))
+
+
+#    store2arff(x, y, 'parsed{}.arff'.format(MAX), range(x.shape[1]))

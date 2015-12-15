@@ -1,0 +1,8 @@
+cannot find max argument
+set MAX as 400
+changed
+Adding level-1 data
+Adding level-2 data
+Adding level-3 data
+x.shape=(400, 658) y.shape=(400,)
+MAX=400
